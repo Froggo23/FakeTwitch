@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Live Stream Demo</title>
+</head>
+<body>
+<video id="localPreview" autoplay playsinline muted></video>
+<video id="remoteView" autoplay playsinline></video>
+<button id="startStream">내 캠 송출 시작</button>
+
+<script>
+  const ws = new WebSocket("ws://192.168.0.22:8080/ws/live");
+  let sourceBuffer;
+  let mediaSource;
+
+  // 수신용 비디오
+  mediaSource = new MediaSource();
+  document.getElementById('remoteView').src = URL.createObjectURL(mediaSource);
+
+  mediaSource.addEventListener('sourceopen', () => {
+    sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp8"');
+    ws.onmessage = event => {
+      if (sourceBuffer && !sourceBuffer.updating) {
+        sourceBuffer.appendBuffer(new Uint8Array(event.data));
+      }
+    };
+  });
+
+  // 송출 시작 버튼 (내 캠을 서버로 전송)
+  document.getElementById('startStream').onclick = async function() {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    document.getElementById('localPreview').srcObject = stream;
+    const recorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp8' });
+    recorder.ondataavailable = (e) => { if (ws.readyState === 1) { ws.send(e.data); } };
+    recorder.start(100); // 100ms마다 chunk 발생 및 서버전송
+  };
+</script>
+</body>
+</html>
